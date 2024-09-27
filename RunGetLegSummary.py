@@ -31,6 +31,7 @@ try:
     #sql.TruncateFile("BlueT_API_LegSummary")
     logging.info(date.today())
     logging.info("Run api")
+    sql.create_legsummary_table()  # CREATE IF NOT EXISTS
     Departure=sql.get_EventID()
     
     print(f"insert {len(Departure)} data")
