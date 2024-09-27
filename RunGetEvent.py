@@ -62,6 +62,7 @@ try:
     #sql.TruncateFile("BlueT_API_Events")
     logging.info(date.today())
     logging.info("Run api")
+    sql.create_event_table()  # CREATE IF NOT EXISTS
     Vessels=sql.get_Vessel()
     count=0
     for Vessel in Vessels:
