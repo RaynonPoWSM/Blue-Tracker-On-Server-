@@ -7,7 +7,7 @@ import os
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
-    filename = os.getenv("logfile")+'RunGetVoyage.log',
+    filename=os.path.join("log", "RunGetVoyage.log"),  # Please use relative path
     datefmt='%Y-%m-%d %H:%M:%S')
 
 today=date.today()

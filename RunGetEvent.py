@@ -8,7 +8,7 @@ import os
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
-    filename = os.getenv("logfile")+'RunGetEvent.log',
+    filename=os.path.join("log", "RunGetEvent.log"),  # Please use relative path
     datefmt='%Y-%m-%d %H:%M:%S')
 today=date.today()
 
@@ -32,7 +32,7 @@ def getEvent(vessel):
     #file=open("BlueT_API_Events","w")
     count=0
     print("getting events")
-    
+
     response=api.get_Events(vessel)
     print(str(response))
     if "Response" in str(response):
@@ -43,7 +43,7 @@ def getEvent(vessel):
 
     print("flaternning data")
 
-    
+
     for item in EventList:
         print(item["id"])
         # test=[flat(i) for i in item]
