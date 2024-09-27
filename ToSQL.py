@@ -38,11 +38,28 @@ def checkColumnExist(TableName):
 
 
 def CreateColumn(TableName, ColumnName):
-    mycursor.execute(f"""
-                        ALTER TABLE {TableName}
-                        ADD {ColumnName} Varchar(4000);
-                     """)
+    add_colomn_sql = f"ALTER TABLE {TableName} ADD COLUMN IF NOT EXISTS {ColumnName} Varchar(4000)"
+    mycursor.execute(add_colomn_sql)
 
+
+def create_vessel_table(database_name="DEV_WSM_DB", schema_name="API"):
+    create_vessel_table_sql = f"""
+    CREATE TABLE If NOT EXISTS {database_name}.{schema_name}.BlueT_API_Ships (
+        id VARCHAR(10),
+        imoNumber VARCHAR(10),
+        name VARCHAR(20),
+        alternativeName VARCHAR(20),
+        currentVersionStamp INT,
+        shipClassId VARCHAR(5),
+        shipClassName VARCHAR(50),
+        portOfRegistryUnloc VARCHAR(10),
+        isHidden VARCHAR(10),
+        callSign VARCHAR(10),
+        UpdatedDate TIMESTAMP,
+        shortName VARCHAR(5)
+    );
+    """
+    mycursor.execute(create_vessel_table_sql)
 
 def insertVessels(Vessels):
     VesselList = checkColumnExist("BlueT_API_Ships")
