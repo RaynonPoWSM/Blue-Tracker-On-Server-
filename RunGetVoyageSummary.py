@@ -34,6 +34,7 @@ try:
     logging.info(date.today())
     logging.info("Run api")
     print("get Voyage Id")
+    sql.create_voyage_summary_table()  # CREATE IF NOT EXISTS
     voyage=sql.get_VoyageID()
     print("get all Voyage Summary")
     voyageSummary= [api.Get_VoyageSummary(i)for i in voyage]
