@@ -85,7 +85,8 @@ try:
     #sql.TruncateFile("BlueT_API_ReportEngine")
     logging.info(date.today())
     logging.info("Run api")
-    
+
+    sql.create_report_table()  # CREATE IF NOT EXISTS
     Vessels=api.get_Vessels()["items"]
     for Vessel in Vessels:
         print("Vessel:",Vessel["imoNumber"])
