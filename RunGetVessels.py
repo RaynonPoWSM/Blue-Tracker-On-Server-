@@ -10,7 +10,7 @@ import os
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
-    filename = os.getenv("logfile")+'RunGetVessels.log',
+    filename=os.path.join("log", "RunGetVessels.log"),
     datefmt='%Y-%m-%d %H:%M:%S')
 today=date.today()
 
@@ -19,6 +19,7 @@ try:
     logging.info(date.today())
     logging.info("Run api")
     Vessels=api.get_Vessels()["items"]
+    sql.create_vessel_table()  # Create if not exists
     sql.insertVessels(Vessels)
     print(len(Vessels))
     logging.info("End of Vessels")
