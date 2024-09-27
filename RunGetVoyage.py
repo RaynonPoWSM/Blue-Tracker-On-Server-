@@ -21,6 +21,7 @@ try:
     #sql.TruncateFile("BlueT_API_Voyages")
     logging.info(date.today())
     logging.info("Run api")
+    sql.create_voyage_table()  # CREATE IF NOT EXISTS
     
     for Vessel in Vessels:
         print(f"""working on {Vessel["imoNumber"]}""")
