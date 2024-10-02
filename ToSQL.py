@@ -677,7 +677,7 @@ def insertVoyage(Voyages, IMO):
     for Voyage in Voyages:
         mycursor.execute("""
                     INSERT INTO BlueT_API_Voyages (id, name, imoNumber, UpdatedDate)
-                    VALUES (%s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?)
                 """, (Voyage["id"], Voyage["name"], IMO, date))
         Count += 1
 
