@@ -33,6 +33,7 @@ def reportsummaries(Vessel):
     for item in report1:
         id=item["id"]
         print(id)
+        logging.info(f"item id: {id}")
         Data = flat(item)
         Head=Data.keys()
         Line=Data.values()
@@ -69,7 +70,10 @@ def reportsummaries(Vessel):
                             EngLine.append(str(item[element]).replace("'","''"))
                     # print(EngHeader,len(EngHeader))
                     # print(EngLine,len(EngLine))
+
+                    logging.info(f"before insertEngineReport")
                     sql.insertEngineReport(",".join(EngHeader), ",".join(["'"+str(i)+"'" for i in EngLine]))
+                    logging.info(f"after insertEngineReport")
                     EngineReportCount+=1
                 # continue
             else:
@@ -89,10 +93,14 @@ try:
     sql.create_report_table()  # CREATE IF NOT EXISTS
     sql.create_report_engine_table()  # CREATE IF NOT EXISTS
 
+    logging.info("before api.get_Vessels()")
     Vessels=api.get_Vessels()["items"]
+    logging.info("after api.get_Vessels()")
     for Vessel in Vessels:
         print("Vessel:",Vessel["imoNumber"])
+        logging.info(f"Vessel: {Vessel["imoNumber"]}")
         [RC,ERC]=reportsummaries(str(Vessel["imoNumber"]))
+        logging.info(f"after calling report summaries")
         TotalRC+=RC
         TotalERC+=ERC
     logging.info("End of reportsummaries")

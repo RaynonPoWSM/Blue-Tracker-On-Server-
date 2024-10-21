@@ -12,13 +12,15 @@ snowflake_account = os.getenv("snowflake_account")
 snowflake_warehouse = os.getenv("snowflake_warehouse")
 snowflake_database = os.getenv("snowflake_database")
 snowflake_schema = os.getenv("snowflake_schema")
+snowflake_role = os.getenv("snowflake_role")
 conn = sf.connect(
     user=snowflake_user,
     password=snowflake_password,
     account=snowflake_account,
     database=snowflake_database,
     schema=snowflake_schema,
-    warehouse=snowflake_warehouse
+    warehouse=snowflake_warehouse,
+    role=snowflake_role
 )
 
 datesys = datetime.now().strftime("%Y-%m-%d")
