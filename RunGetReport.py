@@ -6,12 +6,14 @@ import logging
 from datetime import date
 from dotenv import load_dotenv, dotenv_values
 import os
+
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
     filename=os.path.join("log", "RunGetReport.log"),
     datefmt='%Y-%m-%d %H:%M:%S')
-today=date.today()
+today = date.today()
+
 
 def flat(json_data, parent_key=''):
     flattened = {}
@@ -23,70 +25,72 @@ def flat(json_data, parent_key=''):
             flattened[new_key] = value
     return flattened
 
+    return [column, line]
 
 
-    return[column,line]
 def reportsummaries(Vessel):
     report1 = api.get_Report(Vessel)["items"]
-    EngineReportCount=0
-    ReportCount=0
+    EngineReportCount = 0
+    ReportCount = 0
     for item in report1:
-        id=item["id"]
+        id = item["id"]
         print(id)
         logging.info(f"item id: {id}")
         Data = flat(item)
-        Head=Data.keys()
-        Line=Data.values()
+        Head = Data.keys()
+        Line = Data.values()
         MainReport = []
         Mainheader = []
-        
-        for i, j in zip(Head,Line):
-            # id=item["id"]
+
+        for i, j in zip(Head, Line):
+            # id = item["id"]
 
             if "ship" in i:
                 continue
             elif "aggregationDetails" in i:
-                
+
                 for item in j:
-                    
-                    EngHeader=[]
-                    EngLine=[]
+
+                    EngHeader = []
+                    EngLine = []
                     EngHeader.append("Engine")
                     EngHeader.append("IMONumber")
                     EngHeader.append("id")
-                    EngLine.append(i.replace("aggregationDetails",""))
+                    EngLine.append(i.replace("aggregationDetails", ""))
                     EngLine.append(Vessel)
                     EngLine.append(id)
                     for element in item:
-                        if type(item[element])==list:
+                        if isinstance(item[element], list):
                             EngHeader.append(element)
-                            EngLine.append(",".join([str(j).replace("'","''") for j in item[element]]))
-                        elif type(item[element])==dict:
-                            for head,line in zip(item[element].keys(),item[element].values()):
-                                EngHeader.append(element+head)
-                                EngLine.append(str(line).replace("'","''"))
+                            EngLine.append(",".join([str(j).replace("'", "''") for j in item[element]]))
+                        elif isinstance(item[element], dict):
+                            for head, line in zip(item[element].keys(), item[element].values()):
+                                EngHeader.append(element + head)
+                                EngLine.append(str(line).replace("'", "''"))
                         else:
                             EngHeader.append(element)
-                            EngLine.append(str(item[element]).replace("'","''"))
+                            EngLine.append(str(item[element]).replace("'", "''"))
                     # print(EngHeader,len(EngHeader))
                     # print(EngLine,len(EngLine))
 
                     logging.info(f"before insertEngineReport")
-                    sql.insertEngineReport(",".join(EngHeader), ",".join(["'"+str(i)+"'" for i in EngLine]))
+                    sql.insertEngineReport(",".join(EngHeader), ",".join(["'" + str(i) + "'" for i in EngLine]))
                     logging.info(f"after insertEngineReport")
-                    EngineReportCount+=1
+                    EngineReportCount += 1
                 # continue
             else:
                 Mainheader.append(i)
                 MainReport.append(j)
-        sql.insertReport(",".join(Mainheader), ",".join(["'"+str(i)+"'" for i in MainReport]), Vessel)
-        ReportCount+=1
-    return [ReportCount,EngineReportCount]
-TotalRC=0
-TotalERC=0
+        sql.insertReport(",".join(Mainheader), ",".join(["'" + str(i) + "'" for i in MainReport]), Vessel)
+        ReportCount += 1
+    return [ReportCount, EngineReportCount]
+
+
+TotalRC = 0
+TotalERC = 0
 try:
-    #sql.TruncateFile("BlueT_API_Report")
-    #sql.TruncateFile("BlueT_API_ReportEngine")
+    # sql.TruncateFile("BlueT_API_Report")
+    # sql.TruncateFile("BlueT_API_ReportEngine")
     logging.info(date.today())
     logging.info("Run api")
 
@@ -94,21 +98,19 @@ try:
     sql.create_report_engine_table()  # CREATE IF NOT EXISTS
 
     logging.info("before api.get_Vessels()")
-    Vessels=api.get_Vessels()["items"]
+    Vessels = api.get_Vessels()["items"]
     logging.info("after api.get_Vessels()")
     for Vessel in Vessels:
-        print("Vessel:",Vessel["imoNumber"])
+        print("Vessel:", Vessel["imoNumber"])
         logging.info(f"Vessel: {Vessel["imoNumber"]}")
-        [RC,ERC]=reportsummaries(str(Vessel["imoNumber"]))
+        [RC, ERC] = reportsummaries(str(Vessel["imoNumber"]))
         logging.info(f"after calling report summaries")
-        TotalRC+=RC
-        TotalERC+=ERC
+        TotalRC += RC
+        TotalERC += ERC
     logging.info("End of reportsummaries")
-    
+
 finally:
     print("complete")
     logging.info(f"ReportCount :{TotalRC}")
     logging.info(f"EngReportCount : {TotalERC}")
     sql.closeConnection()
-
-        
