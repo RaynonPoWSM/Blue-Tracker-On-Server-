@@ -1,10 +1,10 @@
 import FromAPI as api
 import ToSQL as sql
-import pandas as pd
-import numpy as np
+# import pandas as pd
+# import numpy as np
 import logging
 from datetime import date
-from dotenv import load_dotenv, dotenv_values
+# from dotenv import load_dotenv, dotenv_values
 import os
 
 logging.basicConfig(
@@ -25,18 +25,16 @@ def flat(json_data, parent_key=''):
             flattened[new_key] = value
     return flattened
 
-    return [column, line]
 
-
-def reportsummaries(Vessel):
-    report1 = api.get_Report(Vessel)["items"]
+def reportsummaries(cur_vessel):
+    report1 = api.get_Report(cur_vessel)["items"]
     EngineReportCount = 0
     ReportCount = 0
-    for item in report1:
-        id = item["id"]
-        print(id)
-        logging.info(f"item id: {id}")
-        Data = flat(item)
+    for report_item in report1:
+        item_id = report_item["id"]
+        print(item_id)
+        logging.info(f"item id: {item_id}")
+        Data = flat(report_item)
         Head = Data.keys()
         Line = Data.values()
         MainReport = []
@@ -58,7 +56,7 @@ def reportsummaries(Vessel):
                     EngHeader.append("id")
                     EngLine.append(i.replace("aggregationDetails", ""))
                     EngLine.append(Vessel)
-                    EngLine.append(id)
+                    EngLine.append(item_id)
                     for element in item:
                         if isinstance(item[element], list):
                             EngHeader.append(element)
@@ -83,7 +81,7 @@ def reportsummaries(Vessel):
                 MainReport.append(j)
         sql.insertReport(",".join(Mainheader), ",".join(["'" + str(i) + "'" for i in MainReport]), Vessel)
         ReportCount += 1
-    return [ReportCount, EngineReportCount]
+    return ReportCount, EngineReportCount
 
 
 TotalRC = 0
@@ -103,7 +101,7 @@ try:
     for Vessel in Vessels:
         print("Vessel:", Vessel["imoNumber"])
         logging.info(f"Vessel: {Vessel["imoNumber"]}")
-        [RC, ERC] = reportsummaries(str(Vessel["imoNumber"]))
+        RC, ERC = reportsummaries(str(Vessel["imoNumber"]))
         logging.info(f"after calling report summaries")
         TotalRC += RC
         TotalERC += ERC
