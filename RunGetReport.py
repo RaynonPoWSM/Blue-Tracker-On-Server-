@@ -190,7 +190,7 @@ try:
     sql.create_table_with_column(engine_table_name, initial_column_name="REPORTID")
     sql.create_table_with_column(report_table_name, initial_column_name="REPORTID")
 
-    for idx, vessel in enumerate(all_vessel_imo[:3]):
+    for idx, vessel in enumerate(all_vessel_imo):
         logging.info(f"Processing vessel {idx} of {num_vessels}.")
         logging.info(f"Vessel IMO = {vessel}")
         report_count, engine_count = ingest_report_summaries(vessel,
