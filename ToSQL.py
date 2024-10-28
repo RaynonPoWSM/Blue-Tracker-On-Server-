@@ -402,54 +402,72 @@ def upsert_data(data_df, table_name, on=None, delete_insert=True, database_name=
     """
     cur.execute(drop_temp_table_sql)
     success, nchunks, nrows, _ = write_pandas(conn, data_df, temp_table, database=database_name, schema=schema_name,
-                                              table_type="temporary")
+                                              table_type="temporary", auto_create_table=True)
     if success:
         print(f"Temporary table {temp_table_identifier} created. Merging it into {table_identifier}...")
 
     # Merge into
+    match_keys_sql = " AND ".join([f"t.{col} = s.{col}" for col in key_cols])
+    update_clause_set = ", ".join([f"t.{col} = s.{col}" for col in data_df.columns if col not in key_cols])
+    insert_clause_col_list = ", ".join(data_df.columns)
+    insert_clause_val_list = ", ".join([f"s.{col}" for col in data_df.columns])
 
+    # rows_affected = 0
     if delete_insert:
         match_keys_list = ", ".join(key_cols)
-        # """
-        # BEGIN;
-        # -- Step 1: Delete existing rows in target_table that have keys present in source_table
-        # DELETE FROM target_table
-        # WHERE (key1, key2) IN (SELECT DISTINCT key1, key2 FROM source_table);
-        #
-        # -- Step 2: Insert new rows from source_table into target_table
-        # INSERT INTO target_table
-        # SELECT * FROM source_table;
-        # COMMIT;
-        # """
-        run_sql = f"""
+        """
         BEGIN;
+        -- Step 1: Delete existing rows in target_table that have keys present in source_table
+        DELETE FROM target_table
+        WHERE (key1, key2) IN (SELECT DISTINCT key1, key2 FROM source_table);
 
-        DELETE FROM {table_identifier}
-        WHERE ({match_keys_list}) IN (SELECT DISTINCT {match_keys_list} FROM {temp_table_identifier});
-
-        INSERT INTO {table_identifier}
-        SELECT * FROM {temp_table_identifier};
-
+        -- Step 2: Insert new rows from source_table into target_table
+        INSERT INTO target_table
+        SELECT * FROM source_table;
         COMMIT;
         """
+        delete_from_sql = f"""
+        DELETE FROM {table_identifier}
+        WHERE ({match_keys_list}) IN (SELECT DISTINCT {match_keys_list} FROM {temp_table_identifier});
+        """
+        insert_into_sql = f"""
+        INSERT INTO {table_identifier} ({insert_clause_col_list})
+        SELECT * FROM {temp_table_identifier};
+        """
+        try:
+            cur.execute("BEGIN;")
+            cur.execute(delete_from_sql)
+            deleted_rows = cur.rowcount
+            print(f"Number of rows deleted: {deleted_rows}")
+            cur.execute(insert_into_sql)
+            inserted_rows = cur.rowcount
+            print(f"Number of rows inserted: {inserted_rows}")
+            cur.execute("COMMIT;")
+            rows_affected = deleted_rows + inserted_rows
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            # Attempt to rollback
+            try:
+                cur.execute("ROLLBACK;")
+                print("Transaction rolled back due to an exception.")
+            except Exception as rollback_error:
+                print(f"Failed to rollback transaction: {rollback_error}")
+            finally:
+                raise
     else:
-        match_keys_sql = " AND ".join([f"t.{col} = s.{col}" for col in key_cols])
-        update_clause_set = ", ".join([f"t.{col} = s.{col}" for col in data_df.columns if col not in key_cols])
-        insert_clause_col_list = ", ".join(data_df.columns)
-        insert_clause_val_list = ", ".join([f"s.{col}" for col in data_df.columns])
 
-        # """
-        # MERGE INTO target_table AS t
-        # USING source_table AS s
-        #   ON t.key1 = s.key1 AND t.key2 = s.key2
-        # WHEN MATCHED THEN
-        #   UPDATE SET
-        #     t.value1 = s.value1,
-        #     t.value2 = s.value2
-        # WHEN NOT MATCHED THEN
-        #   INSERT (key1, key2, value1, value2)
-        #   VALUES (s.key1, s.key2, s.value1, s.value2);
-        # """
+        """
+        MERGE INTO target_table AS t
+        USING source_table AS s
+          ON t.key1 = s.key1 AND t.key2 = s.key2
+        WHEN MATCHED THEN 
+          UPDATE SET 
+            t.value1 = s.value1,
+            t.value2 = s.value2
+        WHEN NOT MATCHED THEN 
+          INSERT (key1, key2, value1, value2) 
+          VALUES (s.key1, s.key2, s.value1, s.value2);
+        """
 
         run_sql = f"""
         MERGE INTO {table_identifier} AS t
@@ -461,12 +479,15 @@ def upsert_data(data_df, table_name, on=None, delete_insert=True, database_name=
           INSERT ({insert_clause_col_list}) 
           VALUES ({insert_clause_val_list});
         """
+        cur.execute(run_sql)
+        rows_affected = cur.rowcount
+        print(f"Number of rows affected: {rows_affected}")
 
-    # print(run_sql)
-    cur.execute(run_sql)
     cur.execute(drop_temp_table_sql)
-    merge_result = cur.fetchall()
-    return merge_result[0][0]
+    delete_table_result = cur.fetchall()
+    if delete_table_result:
+        print(delete_table_result[0][0])
+    return rows_affected
 
 
 def insert_data(data_df, table_name, database_name=None, schema_name=None):

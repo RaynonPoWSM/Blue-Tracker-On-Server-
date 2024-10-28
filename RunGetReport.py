@@ -37,14 +37,14 @@ def generate_report_dataframes(vessel_imo, start=None, end=None, page_size=None)
 
     engine_data_cur_vessel = []
     main_report_data_cur_vessel = []
-    logging.info(f"Requesting report info of vessel {vessel_imo}")
+    logging.info(f"Requesting report info for vessel {vessel_imo}")
     initial_response = api.get_reports(vessel_imo, params=params)
     num_pages = initial_response["pageCount"]
     logging.info(f"Number of reports to proceed: {initial_response['totalCount']}. Total {num_pages} pages.")
     for p in range(num_pages):
         new_param = params.copy()
         new_param["Page"] = p
-        logging.info(f"Requesting for report info for vessel {vessel_imo}. Page {p}...")
+        logging.info(f"Requesting report info for vessel {vessel_imo}. Page {p}...")
         ship_reports_response = api.get_reports(vessel_imo, params=new_param)
 
         logging.info(f"Parsing report info for vessel {vessel_imo}. Page {p}...")
@@ -93,12 +93,10 @@ def generate_report_dataframes(vessel_imo, start=None, end=None, page_size=None)
 
     # Generate engine report df
     engine_data_cur_vessel_df = pd.DataFrame(engine_data_cur_vessel)
-    engine_data_cur_vessel_df["UPDATEDATE"] = sql.datesys
     engine_data_cur_vessel_df.columns = engine_data_cur_vessel_df.columns.str.upper()  # Convert column names to upper cases
 
     # Generate main report df
     main_report_data_cur_vessel_df = pd.DataFrame(main_report_data_cur_vessel)
-    main_report_data_cur_vessel_df["UPDATEDATE"] = sql.datesys
     main_report_data_cur_vessel_df.columns = main_report_data_cur_vessel_df.columns.str.upper()  # Convert column names to upper cases
 
     return main_report_data_cur_vessel_df, engine_data_cur_vessel_df
@@ -123,26 +121,38 @@ def ingest_report_summaries(vessel_imo, report_engine_table_name, main_report_ta
     """
     # Get the pd DataFrames
     if first_time:
+        logging.info(f"Retrieving all report summaries.")
         main_report, engine_report = generate_report_dataframes(vessel_imo, page_size=100)
     else:
+        logging.info(f"Retrieving report summaries since {sql.two_years_ago_date_str}")
         main_report, engine_report = generate_report_dataframes(vessel_imo, start=sql.two_years_ago_date_str,
                                                                 page_size=100)
 
-    # Append IMO number to the dataframe
+    # Append IMO number and update date to the dataframe
     main_report["IMONUMBER"] = str(vessel_imo)
+    main_report["UPDATEDATE"] = sql.datesys
     engine_report["IMONUMBER"] = str(vessel_imo)
-    logging.info(f"Pushing data to Snowflake. Main report: {len(main_report)} rows. Engine report: {len(engine_report)} rows.")
+    engine_report["UPDATEDATE"] = sql.datesys
+    logging.info(
+        f"Pushing data to Snowflake. Main report: {len(main_report)} rows. Engine report: {len(engine_report)} rows.")
     if first_time:
         sql.insert_data(engine_report, report_engine_table_name, schema_name=schema_name, database_name=database_name)
         sql.insert_data(main_report, main_report_table_name, schema_name=schema_name, database_name=database_name)
     else:
-        # (conn, data_df, table_name, on=None, database_name=None, schema_name=None, temp_table_name=None)
-        sql.upsert_data(main_report, main_report_table_name,
-                        on=["IMONUMBER", "REPORTID"],
-                        schema_name=schema_name, database_name=database_name)
-        sql.upsert_data(engine_report, report_engine_table_name,
-                        on=["IMONUMBER", "REPORTID"],
-                        schema_name=schema_name, database_name=database_name)
+        # Main report table has distinct ["IMONUMBER", "REPORTID"], use update.
+        upsert_rowcount = sql.upsert_data(
+            main_report, main_report_table_name,
+            on=["IMONUMBER", "REPORTID"], delete_insert=False,
+            schema_name=schema_name, database_name=database_name
+        )
+        logging.info(f"Rows affected by the upsert: {upsert_rowcount}")
+        # Engine info table has duplicated ["IMONUMBER", "REPORTID"], use delete and insert.
+        upsert_rowcount = sql.upsert_data(
+            engine_report, report_engine_table_name,
+            on=["IMONUMBER", "REPORTID"], delete_insert=True,
+            schema_name=schema_name, database_name=database_name
+        )
+        logging.info(f"Rows affected by the upsert: {upsert_rowcount}")
     return len(main_report), len(engine_report)
 
 
@@ -180,8 +190,8 @@ try:
     sql.create_table_with_column(engine_table_name, initial_column_name="REPORTID")
     sql.create_table_with_column(report_table_name, initial_column_name="REPORTID")
 
-    for idx, vessel in enumerate(all_vessel_imo):
-        logging.info(f"Processing vessel {idx} out of {num_vessels} vessels.")
+    for idx, vessel in enumerate(all_vessel_imo[:3]):
+        logging.info(f"Processing vessel {idx} of {num_vessels}.")
         logging.info(f"Vessel IMO = {vessel}")
         report_count, engine_count = ingest_report_summaries(vessel,
                                                              report_engine_table_name=engine_table_name,
@@ -194,6 +204,6 @@ try:
 
 finally:
     print("complete")
-    logging.info(f"ReportCount :{total_main_report_count}")
-    logging.info(f"EngReportCount : {total_engine_report_count}")
+    logging.info(f"ReportCount: {total_main_report_count}")
+    logging.info(f"EngReportCount: {total_engine_report_count}")
     sql.closeConnection()
