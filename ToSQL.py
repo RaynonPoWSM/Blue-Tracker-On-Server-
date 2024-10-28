@@ -1,6 +1,8 @@
 # import pandas as pd
 import snowflake.connector as sf
+from snowflake.connector.pandas_tools import write_pandas
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 import os
 
@@ -24,9 +26,25 @@ conn = sf.connect(
 )
 
 datesys = datetime.now().strftime("%Y-%m-%d")
+today_date = datetime.today()
+two_years_ago = today_date - relativedelta(years=2)
+two_years_ago_date_str = two_years_ago.strftime("%Y-%m-%d")
+
 connStr = os.getenv("connStrW")
 
 mycursor = conn.cursor()
+
+
+def print_connection_info(snow_conn):
+    print("Snowflake connection info:")
+    print(f"Account: {snow_conn.account}")
+    print(f"User: {snow_conn.user}")
+    print(f"Database: {snow_conn.database}")
+    print(f"Schema: {snow_conn.schema}")
+    print(f"Role: {snow_conn.role}")
+    print(f"Warehouse: {snow_conn.warehouse}")
+    print(f"Application: {snow_conn.application}")
+    print(f"session_id: {snow_conn.session_id}")
 
 
 def checkColumnExist(TableName):
@@ -262,342 +280,216 @@ def create_legsummary_table(database_name="DEV_WSM_DB", schema_name="API"):
     """
     mycursor.execute(create_sql)
 
-def create_report_table(database_name="DEV_WSM_DB", schema_name="API"):
+
+def check_table_exists(table_name, database_name=None, schema_name=None):
+    if database_name and not schema_name:
+        raise ValueError(
+            "Schema has to be provided when a database is provided"
+        )
+    location = ""
+    if database_name:
+        location = f"{database_name}."
+    schema_filter = "CURRENT_SCHEMA()"
+    if schema_name:
+        schema_filter = f"'{schema_name}'"
+    mycursor.execute(f"""
+        SELECT 1
+        FROM {location}INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_NAME = '{table_name}' AND TABLE_SCHEMA = {schema_filter}
+    """)
+    result = mycursor.fetchone()
+    return True if result else False
+
+
+def get_all_columns(table_name, database_name=None, schema_name=None):
+    if database_name and not schema_name:
+        raise ValueError(
+            "Schema has to be provided when a database is provided"
+        )
+    location = ""
+    if database_name:
+        location = f"{database_name}."
+    schema_filter = "CURRENT_SCHEMA()"
+    if schema_name:
+        schema_filter = f"'{schema_name}'"
+    mycursor.execute(f"""
+        SELECT Column_name
+        FROM {location}INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = '{table_name}' AND TABLE_SCHEMA = {schema_filter}
+    """)
+    column = [i[0] for i in mycursor.fetchall()]
+    return column
+
+
+def create_table_with_column(table_name, initial_column_name="ID", database_name=None, schema_name=None):
+    if database_name and not schema_name:
+        raise ValueError(
+            "Schema has to be provided when a database is provided"
+        )
+    table_identifier = table_name
+    if schema_name:
+        if not database_name:
+            table_identifier = f"{schema_name}.{table_name}"
+        else:
+            table_identifier = f"{database_name}.{schema_name}.{table_name}"
     create_sql = f"""
-    create or replace TABLE {database_name}.{schema_name}.BLUET_API_REPORT (
-        ABHFOFOC VARCHAR(255),
-        ABHFOHSFOC VARCHAR(255),
-        ABHFOLLSFOC VARCHAR(255),
-        ABHFOLSFOC VARCHAR(255),
-        ABLFOFOC VARCHAR(255),
-        ABMDOFOC VARCHAR(255),
-        ABMDOHSFOC VARCHAR(255),
-        ABMDOLLSFOC VARCHAR(255),
-        ABMDOLSFOC VARCHAR(255),
-        ABMGOFOC VARCHAR(255),
-        ABMGOLLSFOC VARCHAR(255),
-        ABMGOLSFOC VARCHAR(255),
-        ABMETHANOLFOC VARCHAR(255),
-        ABLNGFOC VARCHAR(255),
-        ABBTLFOC VARCHAR(255),
-        ABFAMEFOC VARCHAR(255),
-        ABHVOFOC VARCHAR(255),
-        ABBIOFUELBLENDFOC VARCHAR(255),
-        AEHFOFOC VARCHAR(255),
-        AEHFOHSFOC VARCHAR(255),
-        AEHFOLLSFOC VARCHAR(255),
-        AEHFOLSFOC VARCHAR(255),
-        AELFOFOC VARCHAR(255),
-        AEMDOFOC VARCHAR(255),
-        AEMDOHSFOC VARCHAR(255),
-        AEMDOLLSFOC VARCHAR(255),
-        AEMDOLSFOC VARCHAR(255),
-        AEMGOFOC VARCHAR(255),
-        AEMGOLLSFOC VARCHAR(255),
-        AEMGOLSFOC VARCHAR(255),
-        AEMETHANOLFOC VARCHAR(255),
-        AELNGFOC VARCHAR(255),
-        AEBTLFOC VARCHAR(255),
-        AEFAMEFOC VARCHAR(255),
-        AEHVOFOC VARCHAR(255),
-        AEBIOFUELBLENDFOC VARCHAR(255),
-        AIRPRESS VARCHAR(255),
-        AIRTEMP VARCHAR(255),
-        AVERAGERELATIVEAEPOWER VARCHAR(255),
-        AVERAGERELATIVEMEPOWER VARCHAR(255),
-        AVERAGESHAFTRPM VARCHAR(255),
-        AVERAGESLIP VARCHAR(255),
-        AVERAGESLIPOVERGROUND VARCHAR(255),
-        AVERAGESPEEDOVERGROUND VARCHAR(255),
-        AVERAGESPEEDTHROUGHWATER VARCHAR(255),
-        CAPTAIN VARCHAR(255),
-        CARGOREEFERS VARCHAR(255),
-        CHIEFENG VARCHAR(255),
-        COMPLETENESSSCORE VARCHAR(255),
-        COOLINGWATERTEMP VARCHAR(255),
-        COURSEMADEGOOD VARCHAR(255),
-        DAILYAEFOC VARCHAR(255),
-        DAILYMEFOC VARCHAR(255),
-        DAILYTOTALFOC VARCHAR(255),
-        DRAFTAFT VARCHAR(255),
-        DRAFTFWD VARCHAR(255),
-        DRAFTMID VARCHAR(255),
-        ENGINEDISTANCE VARCHAR(255),
-        ENGINEROOMTEMP VARCHAR(255),
-        ESTIMATIONSCORE VARCHAR(255),
-        EVENTCUSTOMID VARCHAR(255),
-        EVENTNAME VARCHAR(255),
-        EVENTSHORTNAME VARCHAR(255),
-        EVENTTYPE VARCHAR(255),
-        GAINLOSSLUBOILCIRCULATIONAE VARCHAR(255),
-        GAINLOSSLUBOILCIRCULATIONME VARCHAR(255),
-        GAINLOSSLUBOILCYLINDER VARCHAR(255),
-        GAINLOSSLUBOILCYLINDERHS VARCHAR(255),
-        GAINLOSSLUBOILCYLINDERLS VARCHAR(255),
-        HEADING VARCHAR(255),
-        ID VARCHAR(255),
-        ISSLOWSTEAMING VARCHAR(255),
-        ISTCCUTOUT VARCHAR(255),
-        MEANDRAFT VARCHAR(255),
-        MEHFOFOC VARCHAR(255),
-        MEHFOHSFOC VARCHAR(255),
-        MEHFOLLSFOC VARCHAR(255),
-        MEHFOLSFOC VARCHAR(255),
-        MELFOFOC VARCHAR(255),
-        MEMDOFOC VARCHAR(255),
-        MEMDOHSFOC VARCHAR(255),
-        MEMDOLLSFOC VARCHAR(255),
-        MEMDOLSFOC VARCHAR(255),
-        MEMGOFOC VARCHAR(255),
-        MEMGOLLSFOC VARCHAR(255),
-        MEMGOLSFOC VARCHAR(255),
-        MEMETHANOLFOC VARCHAR(255),
-        MELNGFOC VARCHAR(255),
-        MEBTLFOC VARCHAR(255),
-        MEFAMEFOC VARCHAR(255),
-        MEHVOFOC VARCHAR(255),
-        MEBIOFUELBLENDFOC VARCHAR(255),
-        NOXEMISSIONSAE VARCHAR(255),
-        NOXEMISSIONSME VARCHAR(255),
-        PERIOD VARCHAR(255),
-        PLAUSIBILITYCOUNTFINE VARCHAR(255),
-        PLAUSIBILITYCOUNTMAJOR VARCHAR(255),
-        PLAUSIBILITYCOUNTMINOR VARCHAR(255),
-        PLAUSIBILITYCOUNTNOTSET VARCHAR(255),
-        PLAUSIBILITYSCORE VARCHAR(255),
-        POSLAT VARCHAR(255),
-        POSLNG VARCHAR(255),
-        REPORTID VARCHAR(255),
-        ROBFUELHFO VARCHAR(255),
-        ROBFUELHFOHS VARCHAR(255),
-        ROBFUELMDO VARCHAR(255),
-        ROBLUBOILCIRCULATIONAE VARCHAR(255),
-        ROBLUBOILCIRCULATIONME VARCHAR(255),
-        ROBLUBOILCYLINDER VARCHAR(255),
-        ROBLUBOILCYLINDERHS VARCHAR(255),
-        ROBLUBOILCYLINDERLS VARCHAR(255),
-        SAILEDDISTANCEOVERGROUND VARCHAR(255),
-        SAILEDDISTANCETHROUGHWATER VARCHAR(255),
-        SAILINGTIME VARCHAR(255),
-        SEASTATE VARCHAR(255),
-        SEAWATERTEMP VARCHAR(255),
-        STATE VARCHAR(255),
-        SWELLDIRECTION VARCHAR(255),
-        SWELLHEIGHT VARCHAR(255),
-        TIMESTAMP VARCHAR(255),
-        TOTALAVERAGEAEPOWER VARCHAR(255),
-        TOTALAVERAGEELECTRICALPOWER VARCHAR(255),
-        TOTALAVERAGEMEPOWER VARCHAR(255),
-        TOTALAVERAGESHAFTPOWER VARCHAR(255),
-        TOTALCO2AB VARCHAR(255),
-        TOTALCO2IGS VARCHAR(255),
-        TOTALCO2INC VARCHAR(255),
-        TOTALCO2UNDEF VARCHAR(255),
-        TOTALCYLINDERLSLUBOILCONSUMPTION VARCHAR(255),
-        TOTALCYLINDEROILCONSUMPTION VARCHAR(255),
-        TOTALFOC VARCHAR(255),
-        TOTALFOCAE VARCHAR(255),
-        TOTALFOCBUTANE VARCHAR(255),
-        TOTALFOCETHANOL VARCHAR(255),
-        TOTALFOCHFO VARCHAR(255),
-        TOTALFOCHFOHS VARCHAR(255),
-        TOTALFOCHFOLLS VARCHAR(255),
-        TOTALFOCHFOLS VARCHAR(255),
-        TOTALFOCLFO VARCHAR(255),
-        TOTALFOCLNG VARCHAR(255),
-        TOTALFOCMDO VARCHAR(255),
-        TOTALFOCME VARCHAR(255),
-        DAILYABFOC VARCHAR(255),
-        NOXEMISSIONSAB VARCHAR(255),
-        TOTALFOCAB VARCHAR(255),
-        CALCULATEDPORTREEFERS VARCHAR(255),
-        CARGOWEIGHT VARCHAR(255),
-        MASTERSETA VARCHAR(255),
-        DISTANCETOGO VARCHAR(255),
-        TOTALCIRCULATIONLUBOILAECONSUMPTION VARCHAR(255),
-        TOTALCO2ME VARCHAR(255),
-        LEGEVENTID VARCHAR(255),
-        TOTALCYLINDERHSLUBOILCONSUMPTION VARCHAR(255),
-        GAINLOSSFUELHFO VARCHAR(255),
-        GAINLOSSFUELHFOHS VARCHAR(255),
-        MEHFOHSLCV VARCHAR(255),
-        MEHFOHSSULPHURCONTENT VARCHAR(255),
-        ROBFUELMGO VARCHAR(255),
-        SOXEMISSIONSME VARCHAR(255),
-        TOTALFOCISO VARCHAR(255),
-        TOTALFOCMETHANOL VARCHAR(255),
-        TOTALFOCMGO VARCHAR(255),
-        TOTALFOCPROPANE VARCHAR(255),
-        TOTALFOCUNDEF VARCHAR(255),
-        TOTALCIRCULATIONLUBOILMECONSUMPTION VARCHAR(255),
-        TOTALFRESHWATERCONSUMPTIONBOILER VARCHAR(255),
-        TOTALFRESHWATERCONSUMPTIONDOMESTIC VARCHAR(255),
-        TOTALCO2 VARCHAR(255),
-        TOTALCO2AE VARCHAR(255),
-        TOTALFRESHWATERCONSUMPTIONUNDEF VARCHAR(255),
-        TOTALFRESHWATERCONSUMPTIONWASHING VARCHAR(255),
-        BUNKERLUBOILCYLINDER VARCHAR(255),
-        BUNKERLUBOILCYLINDERHS VARCHAR(255),
-        TOTALGAINLOSSFUELOIL VARCHAR(255),
-        BUNKERFUELMGO VARCHAR(255),
-        TOTALGAINLOSSLUBOILCIRCULATION VARCHAR(255),
-        TOTALGENERATEDAEENERGY VARCHAR(255),
-        TOTALBUNKERFUELOIL VARCHAR(255),
-        EEOIWEIGHT VARCHAR(255),
-        TOTALGENERATEDELECTRICALENERGY VARCHAR(255),
-        TOTALGENERATEDMEENERGY VARCHAR(255),
-        DAILYMEFOCISO VARCHAR(255),
-        DAILYTOTALFOCISO VARCHAR(255),
-        TOTALGENERATEDSHAFTENERGY VARCHAR(255),
-        TOTALNOXEMISSIONS VARCHAR(255),
-        CARGOTEUEMPTY VARCHAR(255),
-        CARGOTEUFULL VARCHAR(255),
-        TOTALROBFRESHWATER VARCHAR(255),
-        MEHFOSULPHURCONTENT VARCHAR(255),
-        TOTALROBFUELOIL VARCHAR(255),
-        TOTALROBLUBOILCIRCULATION VARCHAR(255),
-        ROBFUELHFOLS VARCHAR(255),
-        AER VARCHAR(255),
-        TOTALRUNNINGHOURSME VARCHAR(255),
-        TOTALSCOCME VARCHAR(255),
-        CURRENTFACTOR VARCHAR(255),
-        DOUGLASSEASCALE VARCHAR(255),
-        TOTALSFOCAE VARCHAR(255),
-        AVERAGERELATIVEAEGENERATORPOWER VARCHAR(255),
-        TOTALSFOCAEISO VARCHAR(255),
-        GAINLOSSFUELMGO VARCHAR(255),
-        TOTALSFOCME VARCHAR(255),
-        GAINLOSSFUELLFO VARCHAR(255),
-        TOTALSFOCMEISO VARCHAR(255),
-        TOTALSOXEMISSIONS VARCHAR(255),
-        ABHFOLSSULPHURCONTENT VARCHAR(255),
-        AEHFOLSSULPHURCONTENT VARCHAR(255),
-        TRANSPORTEFFICIENCY VARCHAR(255),
-        BALLASTWEIGHT VARCHAR(255),
-        TRIM VARCHAR(255),
-        DISPLACEMENT VARCHAR(255),
-        UPDATEDDATE VARCHAR(255),
-        SOXEMISSIONSAB VARCHAR(4000),
-        VERSIONSTAMP VARCHAR(4000),
-        SOXEMISSIONSAE VARCHAR(4000),
-        VOYAGENAME VARCHAR(4000),
-        EEOITEU VARCHAR(4000),
-        WATERDEPTH VARCHAR(4000),
-        WATERDEPTHBELOWKEEL VARCHAR(4000),
-        MEHFOLSSULPHURCONTENT VARCHAR(4000),
-        GAINLOSSFUELHFOLS VARCHAR(4000),
-        WAVEDIRECTION VARCHAR(4000),
-        WAVEHEIGHT VARCHAR(4000),
-        BUNKERFUELHFO VARCHAR(4000),
-        BUNKERFUELHFOLS VARCHAR(4000),
-        WINDDIRREL VARCHAR(4000),
-        WINDDIRTRUE VARCHAR(4000),
-        ABHFOHSLCV VARCHAR(4000),
-        ABHFOHSSULPHURCONTENT VARCHAR(4000),
-        WINDFORCE VARCHAR(4000),
-        AEHFOHSLCV VARCHAR(4000),
-        WINDSPEEDREL VARCHAR(4000),
-        WINDSPEEDRELKNOTS VARCHAR(4000),
-        AEHFOHSSULPHURCONTENT VARCHAR(4000),
-        AEMGOLCV VARCHAR(4000),
-        WINDSPEEDTRUE VARCHAR(4000),
-        WINDSPEEDTRUEKNOTS VARCHAR(4000),
-        AEMGOSULPHURCONTENT VARCHAR(4000),
-        DAILYABFOCISO VARCHAR(4000),
-        TOTALFOCMEISO VARCHAR(4000),
-        TOTALFOCABISO VARCHAR(4000),
-        TOTALFOCAEISO VARCHAR(4000),
-        DAILYAEFOCISO VARCHAR(4000),
-        ROBFUELLFO VARCHAR(4000),
-        BUNKERFUELHFOHS VARCHAR(4000),
-        BUNKERFUELMDO VARCHAR(4000),
-        IMONUM VARCHAR(4000),
-        CURRENTCII VARCHAR(4000),
-        CURRENTCIICORRECTED VARCHAR(4000),
-        CIIREQUIRED VARCHAR(4000),
-        CIIRATING VARCHAR(4000),
-        CIIRATINGCORRECTED VARCHAR(4000),
-        CIIATTAINED VARCHAR(4000),
-        CIIATTAINEDCORRECTED VARCHAR(4000),
-        CIIATTAINEDRATING VARCHAR(4000),
-        CIIATTAINEDRATINGCORRECTED VARCHAR(4000),
-        MONTHLYCII VARCHAR(4000),
-        MONTHLYCIICORRECTED VARCHAR(4000),
-        PLAUSIBILITYCOUNTACKNOWLEDGED VARCHAR(4000),
-        ROBFRESHWATERDISTILLED VARCHAR(4000),
-        ABMGOLLSLCV VARCHAR(4000),
-        ABMGOLLSSULPHURCONTENT VARCHAR(4000),
-        AEMGOLLSLCV VARCHAR(4000),
-        AEMGOLLSSULPHURCONTENT VARCHAR(4000),
-        MEMGOLLSLCV VARCHAR(4000),
-        MEMGOLLSSULPHURCONTENT VARCHAR(4000),
-        BUNKERFRESHWATERPRODUCED VARCHAR(4000),
-        MONTHLYCIIRATING VARCHAR(4000),
-        MONTHLYCIICORRECTEDRATING VARCHAR(4000),
-        ROBFUELMGOLS VARCHAR(4000),
-        ROBFUELMGOLLS VARCHAR(4000),
-        BDNNUMBERS VARCHAR(4000),
-        BDNNUMBERSFUEL VARCHAR(4000),
-        BDNNUMBERSLUBOIL VARCHAR(4000),
-        TOTALBUNKERFOSSILFUELAMOUNT VARCHAR(4000)
+    CREATE TABLE IF NOT EXISTS {table_identifier} (
+        {initial_column_name} VARCHAR(255)
     );
     """
     mycursor.execute(create_sql)
 
-def create_report_engine_table(database_name="DEV_WSM_DB", schema_name="API"):
-    create_sql = f"""
-    CREATE TABLE IF NOT EXISTS {database_name}.{schema_name}.BLUET_API_REPORTENGINE (
-        NAME VARCHAR(255),
-        AVERAGESHAFTRPM VARCHAR(255),
-        SHAFTREVOLUTIONS VARCHAR(255),
-        GENERATOREFFICIENCY VARCHAR(255),
-        AVERAGESHAFTPOWER VARCHAR(255),
-        GENERATEDSHAFTENERGY VARCHAR(255),
-        RELATIVEPOWER VARCHAR(255),
-        SLIPTHROUGHWATER VARCHAR(255),
-        SLIPOVERGROUND VARCHAR(255),
-        ENGINEDISTANCE VARCHAR(255),
-        LUBOILCONSUMPTIONS VARCHAR(255),
-        AVERAGEPOWER VARCHAR(255),
-        GENERATEDENERGY VARCHAR(255),
-        AVERAGENOXVALUE VARCHAR(255),
-        CONSUMPTIONS VARCHAR(255),
-        NO VARCHAR(255),
-        RUNNINGHOURS VARCHAR(255),
-        GENERATEDGENERATORENERGY VARCHAR(255),
-        AVERAGEGENERATORPOWER VARCHAR(255),
-        LOAD VARCHAR(255),
-        AGGREGATE VARCHAR(255),
-        KIND VARCHAR(255),
-        AMOUNT VARCHAR(255),
-        TYPESULPHURESTIMATED VARCHAR(255),
-        LUBOIL VARCHAR(255),
-        FRESHWATER VARCHAR(255),
-        AMOUNTISO VARCHAR(255),
-        TYPELCV VARCHAR(255),
-        TYPESULPHUR VARCHAR(255),
-        AMOUNTCO2 VARCHAR(255),
-        TYPECO2FACTOR VARCHAR(255),
-        RELATIVEGENERATORPOWER VARCHAR(255),
-        TYPEGRADE VARCHAR(255),
-        TYPEDENSITY VARCHAR(255),
-        ENGINE VARCHAR(255),
-        IMONUMBER VARCHAR(255),
-        RUNNINGHOURSSHAFTGENERATOR VARCHAR(255),
-        ID VARCHAR(255),
-        TYPETBN VARCHAR(255),
-        DENSITY VARCHAR(255),
-        VOLUME VARCHAR(255),
-        UPDATEDDATE VARCHAR(255),
-        PURPOSE VARCHAR(4000),
-        FRESHWATERKIND VARCHAR(4000),
-        SFOC VARCHAR(4000),
-        SFOCISO VARCHAR(4000),
-        TOTALFOC VARCHAR(4000),
-        TOTALFOCISO VARCHAR(4000)
-    );
+def drop_table(table_name, database_name=None, schema_name=None):
+    if database_name and not schema_name:
+        raise ValueError(
+            "Schema has to be provided when a database is provided"
+        )
+    table_identifier = table_name
+    if schema_name:
+        if not database_name:
+            table_identifier = f"{schema_name}.{table_name}"
+        else:
+            table_identifier = f"{database_name}.{schema_name}.{table_name}"
+    drop_sql = f"""
+    DROP TABLE IF EXISTS {table_identifier};
     """
-    mycursor.execute(create_sql)
+    mycursor.execute(drop_sql)
+    return mycursor.fetchall()[0][0]
+
+
+def upsert_data(data_df, table_name, on=None, delete_insert=True, database_name=None, schema_name=None,
+                temp_table_name=None):
+    """
+    delete_insert:
+        True: Delete matched rows of the source table, then insert(append) the whole source table to the target table.
+                Used when then keys are not unique.
+        False: Update the matched rows, insert otherwise. Used when the keys are unique values.
+    """
+    if not on:
+        raise ValueError(
+            "Parameter 'on' must be a string or a list of strings."
+        )
+    if database_name and not schema_name:
+        raise ValueError(
+            "Schema has to be provided when a database is provided"
+        )
+    key_cols = on
+    if isinstance(on, str):
+        key_cols = [on]
+
+    temp_table = temp_table_name if temp_table_name else f"TEMP_TABLE_{datetime.now().strftime("%Y%m%d_%H%M%S")}"
+    table_identifier = table_name
+    temp_table_identifier = temp_table
+    if schema_name:
+        if not database_name:
+            table_identifier = f"{schema_name}.{table_name}"
+            temp_table_identifier = f"{schema_name}.{temp_table}"
+        else:
+            table_identifier = f"{database_name}.{schema_name}.{table_name}"
+            temp_table_identifier = f"{database_name}.{schema_name}.{temp_table}"
+    cur = conn.cursor()
+    current_columns = get_all_columns(table_name, database_name=database_name)
+    # print(f"{current_columns=}")
+    for col in data_df.columns:
+        if col not in current_columns:
+            add_column_sql = f"ALTER TABLE {table_identifier} ADD COLUMN IF NOT EXISTS {col} Varchar(4000)"
+            cur.execute(add_column_sql)
+
+    # Upload data into temporary table
+
+    drop_temp_table_sql = f"""
+    DROP TABLE IF EXISTS {temp_table_identifier};
+    """
+    cur.execute(drop_temp_table_sql)
+    success, nchunks, nrows, _ = write_pandas(conn, data_df, temp_table, database=database_name, schema=schema_name,
+                                              table_type="temporary")
+    if success:
+        print(f"Temporary table {temp_table_identifier} created. Merging it into {table_identifier}...")
+
+    # Merge into
+
+    if delete_insert:
+        match_keys_list = ", ".join(key_cols)
+        # """
+        # BEGIN;
+        # -- Step 1: Delete existing rows in target_table that have keys present in source_table
+        # DELETE FROM target_table
+        # WHERE (key1, key2) IN (SELECT DISTINCT key1, key2 FROM source_table);
+        #
+        # -- Step 2: Insert new rows from source_table into target_table
+        # INSERT INTO target_table
+        # SELECT * FROM source_table;
+        # COMMIT;
+        # """
+        run_sql = f"""
+        BEGIN;
+
+        DELETE FROM {table_identifier}
+        WHERE ({match_keys_list}) IN (SELECT DISTINCT {match_keys_list} FROM {temp_table_identifier});
+
+        INSERT INTO {table_identifier}
+        SELECT * FROM {temp_table_identifier};
+
+        COMMIT;
+        """
+    else:
+        match_keys_sql = " AND ".join([f"t.{col} = s.{col}" for col in key_cols])
+        update_clause_set = ", ".join([f"t.{col} = s.{col}" for col in data_df.columns if col not in key_cols])
+        insert_clause_col_list = ", ".join(data_df.columns)
+        insert_clause_val_list = ", ".join([f"s.{col}" for col in data_df.columns])
+
+        # """
+        # MERGE INTO target_table AS t
+        # USING source_table AS s
+        #   ON t.key1 = s.key1 AND t.key2 = s.key2
+        # WHEN MATCHED THEN
+        #   UPDATE SET
+        #     t.value1 = s.value1,
+        #     t.value2 = s.value2
+        # WHEN NOT MATCHED THEN
+        #   INSERT (key1, key2, value1, value2)
+        #   VALUES (s.key1, s.key2, s.value1, s.value2);
+        # """
+
+        run_sql = f"""
+        MERGE INTO {table_identifier} AS t
+        USING {temp_table_identifier} AS s
+          ON {match_keys_sql}
+        WHEN MATCHED THEN 
+          UPDATE SET {update_clause_set}
+        WHEN NOT MATCHED THEN 
+          INSERT ({insert_clause_col_list}) 
+          VALUES ({insert_clause_val_list});
+        """
+
+    print(run_sql)
+    cur.execute(run_sql)
+    cur.execute(drop_temp_table_sql)
+    merge_result = cur.fetchall()
+    print(merge_result)
+
+
+def insert_data(data_df, table_name, database_name=None, schema_name=None):
+    if database_name and not schema_name:
+        raise ValueError(
+            "Schema has to be provided when a database is provided"
+        )
+    table_identifier = table_name
+    if schema_name:
+        if not database_name:
+            table_identifier = f"{schema_name}.{table_name}"
+        else:
+            table_identifier = f"{database_name}.{schema_name}.{table_name}"
+    # cur = conn.cursor()
+    current_columns = get_all_columns(table_name, database_name=database_name)
+    # print(f"{current_columns=}")
+    for col in data_df.columns:
+        if col not in current_columns:
+            add_column_sql = f"ALTER TABLE {table_identifier} ADD COLUMN IF NOT EXISTS {col} Varchar(4000)"
+            mycursor.execute(add_column_sql)
+    success, nchunks, nrows, _ = write_pandas(conn, data_df, table_name, database=database_name, schema=schema_name)
+
+    print(f"{success=}, {nchunks=}, {nrows=}")
 
 
 def insertVessels(Vessels):

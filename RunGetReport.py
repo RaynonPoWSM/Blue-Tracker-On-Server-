@@ -26,91 +26,174 @@ def flat(json_data, parent_key=''):
     return flattened
 
 
-def reportsummaries(cur_vessel):
-    report1 = api.get_Report(cur_vessel)["items"]
-    EngineReportCount = 0
-    ReportCount = 0
-    for report_item in report1:
-        item_id = report_item["id"]
-        print(item_id)
-        logging.info(f"item id: {item_id}")
-        Data = flat(report_item)
-        Head = Data.keys()
-        Line = Data.values()
-        MainReport = []
-        Mainheader = []
+def generate_report_dataframes(vessel_imo, start=None, end=None, page_size=None):
+    params = {}
+    if start:
+        params["start"] = start
+    if end:
+        params["end"] = end
+    if page_size:
+        params["PageSize"] = page_size
 
-        for i, j in zip(Head, Line):
-            # id = item["id"]
+    engine_data_cur_vessel = []
+    main_report_data_cur_vessel = []
+    print(f"Requesting report info of vessel {vessel_imo}")
+    initial_response = api.get_reports(vessel_imo, params=params)
+    num_pages = initial_response["pageCount"]
+    print(f"Number of reports to proceed: {initial_response['totalCount']}. Total {num_pages} pages.")
+    for p in range(num_pages):
+        new_param = params.copy()
+        new_param["Page"] = p
+        print(f"Requesting for report info for vessel {vessel_imo}. Page {p}...")
+        ship_reports_response = api.get_reports(vessel_imo, params=new_param)
 
-            if "ship" in i:  # Ignore any key name containing the substring "ship"
-                continue
-            elif "aggregationDetails" in i:
+        print(f"Parsing report info for vessel {vessel_imo}. Page {p}...")
+        ship_reports = ship_reports_response["items"]
+        for report_item in ship_reports:
+            report_id = report_item["reportId"]
+            item_id = report_item["id"]
 
-                for item in j:
-                    # j: [{'name': 'ME1', ....]
-                    # item: {'name': 'ME1', ....
-                    # item:
-                    EngHeader = []
-                    EngLine = []
-                    EngHeader.append("Engine")
-                    EngHeader.append("IMONumber")
-                    EngHeader.append("id")
-                    EngLine.append(i.replace("aggregationDetails", ""))
-                    EngLine.append(Vessel)
-                    EngLine.append(item_id)
-                    for element in item:
-                        if isinstance(item[element], list):
-                            EngHeader.append(element)
-                            EngLine.append(",".join([str(j).replace("'", "''") for j in item[element]]))
-                        elif isinstance(item[element], dict):
-                            for head, line in zip(item[element].keys(), item[element].values()):
-                                EngHeader.append(element + head)
-                                EngLine.append(str(line).replace("'", "''"))
-                        else:
-                            EngHeader.append(element)
-                            EngLine.append(str(item[element]).replace("'", "''"))
-                    # print(EngHeader,len(EngHeader))
-                    # print(EngLine,len(EngLine))
+            # print(f"report ID = {report_id}")
+            # Ignore all the keys containing "ship":
+            report_item_no_ship = {k: v for k, v in report_item.items() if 'ship' not in k}
 
-                    logging.info(f"before insertEngineReport")
-                    sql.insertEngineReport(",".join(EngHeader), ",".join(["'" + str(i) + "'" for i in EngLine]))
-                    logging.info(f"after insertEngineReport")
-                    EngineReportCount += 1
-                # continue
-            else:
-                Mainheader.append(i)
-                MainReport.append(j)
-        sql.insertReport(",".join(Mainheader), ",".join(["'" + str(i) + "'" for i in MainReport]), Vessel)
-        ReportCount += 1
-    return ReportCount, EngineReportCount
+            # logging.info(f"Report ID: {report_id}")
+            # get the aggregationDetails info then remove it.
+            aggr = report_item_no_ship.pop("aggregationDetails",
+                                           None)  # get the aggregationDetails info then remove it.
+            if aggr:
+                # noinspection PyTypeChecker
+                aggr_flattened = flat(aggr)  # a dict of "str": [list]  # type: ignore
+                for engine_key, engine_data in aggr_flattened.items():
+                    # print(f"{engine_key=}")
+                    # dd = json.dumps(engine_data, indent=4)
+                    # print(dd)
+                    # print("\n\n")
+                    for engine_item in engine_data:
+                        # Each will contribute 1 row
+                        cur_row_dict = {
+                            "ENGINE": str(engine_key),
+                            "REPORTID": str(report_id),
+                            "ID": str(item_id),
+                        }
+                        for k, v in engine_item.items():
+                            if isinstance(v, list):
+                                cur_row_dict[k] = ",".join([str(i) for i in v])
+                            elif isinstance(v, dict):
+                                for sub_k, sub_v in v.items():
+                                    cur_row_dict[k + sub_k] = str(sub_v)
+                            else:
+                                cur_row_dict[k] = str(v)
+                        engine_data_cur_vessel.append(cur_row_dict)  # Store into list
+
+            # Proceed with the main report:
+            main_report_info = flat(report_item_no_ship)
+            main_report_info_str = {k: str(v) for k, v in main_report_info.items()}
+            main_report_data_cur_vessel.append(main_report_info_str)
+
+    # Generate engine report df
+    engine_data_cur_vessel_df = pd.DataFrame(engine_data_cur_vessel)
+    engine_data_cur_vessel_df["UPDATEDATE"] = sql.datesys
+    engine_data_cur_vessel_df.columns = engine_data_cur_vessel_df.columns.str.upper()  # Convert column names to upper cases
+
+    # Generate main report df
+    main_report_data_cur_vessel_df = pd.DataFrame(main_report_data_cur_vessel)
+    main_report_data_cur_vessel_df["UPDATEDATE"] = sql.datesys
+    main_report_data_cur_vessel_df.columns = main_report_data_cur_vessel_df.columns.str.upper()  # Convert column names to upper cases
+
+    return main_report_data_cur_vessel_df, engine_data_cur_vessel_df
 
 
-TotalRC = 0
-TotalERC = 0
+# Empty string/list is stored literally as empty string ''
+# Missing values are NaN, handled by pandas automatically
+def ingest_report_summaries(vessel_imo, report_engine_table_name, main_report_table_name,
+                            database_name=None, schema_name=None, first_time=False
+                            ):
+    """
+    Ingest the data into Snowflake
+    Empty string/list is stored literally as empty string ''.
+    Missing values are NaN, handled by pandas automatically.
+    :param vessel_imo:
+    :param report_engine_table_name:
+    :param main_report_table_name:
+    :param database_name:
+    :param schema_name:
+    :param first_time: If this is the first time ingesting the table.
+    :return: length of the 2 dataframes
+    """
+    # Get the pd DataFrames
+    if first_time:
+        main_report, engine_report = generate_report_dataframes(vessel_imo, page_size=100)
+    else:
+        main_report, engine_report = generate_report_dataframes(vessel_imo, start=sql.two_years_ago_date_str,
+                                                                page_size=100)
+
+    # Append IMO number to the dataframe
+    main_report["IMONUMBER"] = str(vessel_imo)
+    engine_report["IMONUMBER"] = str(vessel_imo)
+    print(f"Pushing data to Snowflake. Main report: {len(main_report)} rows. Engine report: {len(engine_report)} rows.")
+    if first_time:
+        sql.insert_data(engine_report, report_engine_table_name, schema_name=schema_name, database_name=database_name)
+        sql.insert_data(main_report, main_report_table_name, schema_name=schema_name, database_name=database_name)
+    else:
+        # (conn, data_df, table_name, on=None, database_name=None, schema_name=None, temp_table_name=None)
+        sql.upsert_data(main_report, main_report_table_name,
+                        on=["IMONUMBER", "REPORTID"],
+                        schema_name=schema_name, database_name=database_name)
+        sql.upsert_data(engine_report, report_engine_table_name,
+                        on=["IMONUMBER", "REPORTID"],
+                        schema_name=schema_name, database_name=database_name)
+    return len(main_report), len(engine_report)
+
+
+report_table_name = "TEST_REPORT"
+engine_table_name = "TEST_ENGINE"
+total_main_report_count = 0
+total_engine_report_count = 0
 try:
     # sql.TruncateFile("BlueT_API_Report")
     # sql.TruncateFile("BlueT_API_ReportEngine")
     logging.info(date.today())
     logging.info("Run api")
 
-    sql.create_report_table()  # CREATE IF NOT EXISTS
-    sql.create_report_engine_table()  # CREATE IF NOT EXISTS
+    Vessels_all = api.get_vessels()
 
-    Vessels = api.get_Vessels()["items"]
+    num_page = Vessels_all['pageCount']
+    num_vessels = Vessels_all['totalCount']
+    logging.info(f"Number of vessels to proceed: {num_vessels}")
 
-    for Vessel in Vessels:
-        # Every vessel (ship) has 3000+ items (reports), each item contributes 1 row to the table
-        print("Vessel:", Vessel["imoNumber"])
-        logging.info(f"Vessel: {Vessel["imoNumber"]}")
-        RC, ERC = reportsummaries(str(Vessel["imoNumber"]))
-        logging.info(f"after calling report summaries")
-        TotalRC += RC
-        TotalERC += ERC
-    logging.info("End of reportsummaries")
+    all_vessel_imo = []
+    for pg in range(num_page):
+        resp_js = api.get_vessels({"Page": pg})
+        all_vessel_imo += [vessel_info["imoNumber"] for vessel_info in resp_js['items']]
+
+    first_time_to_ingest = False
+    main_report_table_exists = sql.check_table_exists(report_table_name)
+    if not main_report_table_exists:
+        first_time_to_ingest = True
+        # If main report does not exist, then also drop the engine table
+        drop_table_result = sql.drop_table(engine_table_name)
+        logging.info(drop_table_result)
+        logging.info("Report tables have been initialized")
+
+    # Create table if not exists
+    sql.create_table_with_column(engine_table_name, initial_column_name="REPORTID")
+    sql.create_table_with_column(report_table_name, initial_column_name="REPORTID")
+
+    for idx, vessel in enumerate(all_vessel_imo):
+        logging.info(f"Processing vessel {idx} out of {num_vessels} vessels.")
+        logging.info(f"Vessel IMO = {vessel}")
+        report_count, engine_count = ingest_report_summaries(vessel,
+                                                             report_engine_table_name=engine_table_name,
+                                                             main_report_table_name=report_table_name,
+                                                             first_time=first_time_to_ingest
+                                                             )
+        total_main_report_count += report_count
+        total_engine_report_count += engine_count
+        logging.info(f"======== Vessel {vessel} done ========")
 
 finally:
     print("complete")
-    logging.info(f"ReportCount :{TotalRC}")
-    logging.info(f"EngReportCount : {TotalERC}")
+    logging.info(f"ReportCount :{total_main_report_count}")
+    logging.info(f"EngReportCount : {total_engine_report_count}")
     sql.closeConnection()
