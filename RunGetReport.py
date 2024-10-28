@@ -1,6 +1,6 @@
 import FromAPI as api
 import ToSQL as sql
-# import pandas as pd
+import pandas as pd
 # import numpy as np
 import logging
 from datetime import date
@@ -43,12 +43,14 @@ def reportsummaries(cur_vessel):
         for i, j in zip(Head, Line):
             # id = item["id"]
 
-            if "ship" in i:
+            if "ship" in i:  # Ignore any key name containing the substring "ship"
                 continue
             elif "aggregationDetails" in i:
 
                 for item in j:
-
+                    # j: [{'name': 'ME1', ....]
+                    # item: {'name': 'ME1', ....
+                    # item:
                     EngHeader = []
                     EngLine = []
                     EngHeader.append("Engine")
@@ -95,10 +97,10 @@ try:
     sql.create_report_table()  # CREATE IF NOT EXISTS
     sql.create_report_engine_table()  # CREATE IF NOT EXISTS
 
-    logging.info("before api.get_Vessels()")
     Vessels = api.get_Vessels()["items"]
-    logging.info("after api.get_Vessels()")
+
     for Vessel in Vessels:
+        # Every vessel (ship) has 3000+ items (reports), each item contributes 1 row to the table
         print("Vessel:", Vessel["imoNumber"])
         logging.info(f"Vessel: {Vessel["imoNumber"]}")
         RC, ERC = reportsummaries(str(Vessel["imoNumber"]))
