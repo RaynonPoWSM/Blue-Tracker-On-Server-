@@ -462,11 +462,11 @@ def upsert_data(data_df, table_name, on=None, delete_insert=True, database_name=
           VALUES ({insert_clause_val_list});
         """
 
-    print(run_sql)
+    # print(run_sql)
     cur.execute(run_sql)
     cur.execute(drop_temp_table_sql)
     merge_result = cur.fetchall()
-    print(merge_result)
+    return merge_result[0][0]
 
 
 def insert_data(data_df, table_name, database_name=None, schema_name=None):
@@ -489,7 +489,7 @@ def insert_data(data_df, table_name, database_name=None, schema_name=None):
             mycursor.execute(add_column_sql)
     success, nchunks, nrows, _ = write_pandas(conn, data_df, table_name, database=database_name, schema=schema_name)
 
-    print(f"{success=}, {nchunks=}, {nrows=}")
+    # print(f"{success=}, {nchunks=}, {nrows=}")
 
 
 def insertVessels(Vessels):

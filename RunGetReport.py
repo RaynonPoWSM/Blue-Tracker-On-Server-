@@ -37,17 +37,17 @@ def generate_report_dataframes(vessel_imo, start=None, end=None, page_size=None)
 
     engine_data_cur_vessel = []
     main_report_data_cur_vessel = []
-    print(f"Requesting report info of vessel {vessel_imo}")
+    logging.info(f"Requesting report info of vessel {vessel_imo}")
     initial_response = api.get_reports(vessel_imo, params=params)
     num_pages = initial_response["pageCount"]
-    print(f"Number of reports to proceed: {initial_response['totalCount']}. Total {num_pages} pages.")
+    logging.info(f"Number of reports to proceed: {initial_response['totalCount']}. Total {num_pages} pages.")
     for p in range(num_pages):
         new_param = params.copy()
         new_param["Page"] = p
-        print(f"Requesting for report info for vessel {vessel_imo}. Page {p}...")
+        logging.info(f"Requesting for report info for vessel {vessel_imo}. Page {p}...")
         ship_reports_response = api.get_reports(vessel_imo, params=new_param)
 
-        print(f"Parsing report info for vessel {vessel_imo}. Page {p}...")
+        logging.info(f"Parsing report info for vessel {vessel_imo}. Page {p}...")
         ship_reports = ship_reports_response["items"]
         for report_item in ship_reports:
             report_id = report_item["reportId"]
@@ -131,7 +131,7 @@ def ingest_report_summaries(vessel_imo, report_engine_table_name, main_report_ta
     # Append IMO number to the dataframe
     main_report["IMONUMBER"] = str(vessel_imo)
     engine_report["IMONUMBER"] = str(vessel_imo)
-    print(f"Pushing data to Snowflake. Main report: {len(main_report)} rows. Engine report: {len(engine_report)} rows.")
+    logging.info(f"Pushing data to Snowflake. Main report: {len(main_report)} rows. Engine report: {len(engine_report)} rows.")
     if first_time:
         sql.insert_data(engine_report, report_engine_table_name, schema_name=schema_name, database_name=database_name)
         sql.insert_data(main_report, main_report_table_name, schema_name=schema_name, database_name=database_name)
