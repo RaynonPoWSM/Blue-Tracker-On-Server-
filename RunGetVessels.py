@@ -18,7 +18,18 @@ try:
     #sql.TruncateFile("BlueT_API_Ships")
     logging.info(date.today())
     logging.info("Run api")
-    Vessels=api.get_Vessels()["items"]
+    fullpage=True
+    #add to stream line Vessel list
+    Vessels=[]
+    pageNum=0
+    while fullpage==True:
+        Vesselspart=api.get_vessels({"Page": pageNum})["items"]
+        if len(Vesselspart)==20:
+            [Vessels.append(i)for i in Vesselspart]
+            pageNum+=1
+        else:
+            [Vessels.append(i)for i in Vesselspart]
+            fullpage=False
     sql.create_vessel_table()  # Create if not exists
     sql.insertVessels(Vessels)
     print(len(Vessels))
